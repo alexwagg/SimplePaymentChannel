@@ -1,0 +1,297 @@
+[
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getPayer",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getDeposit",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getClosedStatus",
+		"outputs": [
+			{
+				"name": "",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "CHANNELLIFETIME",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "OWNER",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "TREASURY",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getOpenTime",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "CHANNELCOUNT",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "changeOwner",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "expireChannel",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"name": "payer",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"name": "channelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "paidAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "refundedAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "ChannelClosed",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"name": "payer",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"name": "channelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "refundedAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "ChannelExpired",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"name": "payer",
+				"type": "address"
+			},
+			{
+				"indexed": true,
+				"name": "channelId",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "depositAmount",
+				"type": "uint256"
+			}
+		],
+		"name": "ChannelOpened",
+		"type": "event"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "createChannel",
+		"outputs": [],
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			},
+			{
+				"name": "paidAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "v",
+				"type": "uint8"
+			},
+			{
+				"name": "r",
+				"type": "bytes32"
+			},
+			{
+				"name": "s",
+				"type": "bytes32"
+			}
+		],
+		"name": "closeChannel",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "treasuryAddress",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newTreasury",
+				"type": "address"
+			}
+		],
+		"name": "changeTreasury",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]

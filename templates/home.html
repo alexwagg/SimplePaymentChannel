@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+
+		<title>Payment Channel</title>
+	</head>
+
+	<body>
+
+		<h1>Welcome to my basic payment channel implementation</h1>
+		<br /><hr /><br />
+		<text>This payment channel requires a deposit of 0.1 eth, and payments of 0.001 eth (1 finney) every 30 seconds.</text>
+		<br /><br />
+		<button type="button" id="start-channel">Start Channel</button>
+		<button type="button" id="start-watching">Start Watching</button>
+		<button type="button" id="stop-watching">Stop Watching</button>
+		<button type="button" id="close-channel">Close Channel</button>
+
+		<script src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+		<!-- note: using web3.js 1.0 beta -->
+		<script type='text/javascript' src="./static/js/web3.min.js"></script>
+		<script type='text/javascript' src='./static/js/paymentchannel.js'></script>
+	</body>
+
+</html>
+

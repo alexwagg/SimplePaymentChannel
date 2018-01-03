@@ -86,7 +86,7 @@ contract PaymentChannel {
 		ChannelOpened(msg.sender, channelId, msg.value);
 	}
 
-	function closeChannel(uint256 channelId, uint256 paidAmount, uint8 v, bytes32 r, bytes32 s) public {
+	function closeChannel(uint256 channelId, uint256 paidAmount, bytes32 r, bytes32 s, uint8 v) public {
 		
 		// IMPORTANT: verify that the payer has signed a message permitting the channel owner to subtract their balance by this amount
 		address payerAddressVerify = ecrecover(keccak256(channelId, paidAmount), v, r, s);

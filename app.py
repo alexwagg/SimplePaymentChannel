@@ -17,6 +17,8 @@ channel_address = '0xB4108eb4A6AFEC5179dBBe261e813A7B1d9429C6'
 channel_abi = json.load(open('./static/abi/PaymentChannelABI.json'))
 ## initializing the contract with this address
 channel_instance = w3.eth.contract(address=channel_address, abi=channel_abi)
+## MANDATORY PAYMENT in Wei, obviously this shouldn't be hardcoded, but for now...
+PAYMENT_SIZE = 1e15
 
 @app.route('/', methods=['GET'])
 def home():
@@ -38,6 +40,8 @@ def pay_channel():
 	channel_id = int(request.form['channel_id'])
 	signed_blob = request.form['signed_blob']
 
+	## check if this channel is valid, and insert into the database if we do not have it
+	## this could occur if a user did not use our front-end to create a channel, but directly used the blockchain
 	success, msg = determine_valid_channel(channel_id, amt_to_pay)
 
 	if (not success):
@@ -49,86 +53,107 @@ def pay_channel():
 	conn = mysql.connector.connect(user=my_connections.mysql_user, password=my_connections.mysql_pass, host=my_connections.mysql_host, database=my_connections.mysql_dbname)
 	cursor = conn.cursor()
 
-	query = 'SELECT payer_address FROM OpenChannels WHERE channel_id = %s'
-	rows = cursor.execute(query, (channel_id, )).fetchall()
+	query = 'SELECT payer_address, paid, deposit FROM OpenChannels WHERE channel_id = %s'
+	cursor.execute(query, (channel_id, ))
+	rows = cursor.fetchall()
 
-	with rows[0][0] as actual_address:
-		if (recovered_address != actual_address):
+	actual_address, paid, deposit = rows[0]
 
-			conn.close()
-			cursor.close()
+	## force the payment to be correct... this actually is covered by the ec recover (wouldn't return correct address if payment size was incorrect)
+	## but we can give a better error message this way
+	if (paid + PAYMENT_SIZE != amt_to_pay):
 
-			return json.dumps({'success': False, 'msg': 'Not owner of channel'})
-		else:
-			query = 'UPDATE OpenChannels SET amt_to_pay = %s, signed_blob = %s WHERE channel_id = %s'
-			cursor.execute(query, (amt_to_pay, signed_blob, channel_id))
-			conn.commit()
+		conn.close()
+		cursor.close()
 
-			cursor.close()
-			conn.close()
+		return json.dumps({'success': False, 'msg': 'Incorrect payment size.', 'deposit': deposit, 'paid': paid})
 
-			return json.dumps({'success': True, 'msg': 'Channel paid successfully!'})
+	elif (recovered_address != actual_address):
+
+		conn.close()
+		cursor.close()
+
+		return json.dumps({'success': False, 'msg': 'Not owner of channel', 'deposit': deposit, 'paid': paid})
+
+	else:
+		query = 'UPDATE OpenChannels SET amt_to_pay = %s, signed_blob = %s WHERE channel_id = %s'
+		cursor.execute(query, (amt_to_pay, signed_blob, channel_id))
+		conn.commit()
+
+		cursor.close()
+		conn.close()
+
+		return json.dumps({'success': True, 'msg': 'Channel paid successfully!', 'deposit': deposit, 'paid': amt_to_pay})
 
 @app.route('/close-channel', methods=['POST'])
 def close_channel_request():
 	channel_id = request.form['channel_id']
 
 	## this should probably send to a database where all of the 'requests' sit until the server iterates over
-	## then and batch closes them for efficiency reasons, however I'm just gonna immedately call close_channel(channel_id)
+	## them and batch closes them for efficiency reasons, however I'm just gonna immedately call close_channel(channel_id)
 
-	success, msg = close_channel(channel_id)
+	success, msg, deposit, paid = close_channel(channel_id)
 
-	return json.dumps({'success': success, 'msg': msg})
+	return json.dumps({'success': success, 'msg': msg, 'deposit': deposit, 'paid': paid})
 
 def close_channel(channel_id):
 	conn = mysql.connector.connect(user=my_connections.mysql_user, password=my_connections.mysql_pass, host=my_connections.mysql_host, database=my_connections.mysql_dbname)
 	cursor = conn.cursor()
 
+	## get the data for this specific channel
 	query = 'SELECT payer_address, open_timestamp, deposit, paid, signed_blob FROM OpenChannels WHERE channel_id = %s'
-	payer_address, open_timestamp, deposit, paid, signed_blob = cursor.execute(query, (channel_id, ))[0]
+	cursor.execute(query, (channel_id, ))
+	rows = cursor.fetchall()
 
-	if (signed_blob == '' or paid == 0):
-		return (False, 'Channel has not been used')
+	## if no rows exist, then this channel doesn't exist yet and can't be closed
+	if (rows == None):
+		return (False, 'Channel does not exist in database', 0, 0)
 
 	else:
-		## gather the r, s, v values from the signed data
-		r = signed_blob[2:66]
-		s = signed_blob[66:130]
-		v = signed_blob[130:132]
+		payer_address, open_timestamp, deposit, paid, signed_blob = rows[0]
 
-		## build and then send a transaction from the owner address to the contract
-		tx_data = channel_instance.buildTransaction({'from':owner}).closeChannel(channel_id, paid, r, s, v)
-		tx_data_signed = w3.eth.signTransaction(tx_data, my_connections.owner_privkey)
-		tx_data_signed_raw = rlp.encode(tx_data_signed)
-		tx_data_signed_raw_hex = w3.toHex(tx_data_signed_raw)
-		## sending transaction...
-		tx_hash = w3.eth.sendRawTransaction(tx_data_signed_raw_hex)
+		if (signed_blob == '' or paid == 0):
+			return (False, 'Channel has not been used', deposit, 0)
 
-		## WARNING: we are NOT currently checking is the transaction succeeds... yet
-		## we should implement this, either through some async function that callback's when the transaction is mined
-		## or through a intermediate table in the database, where we occassionally iterate through the rows, and see if
-		## they are successful, and can be added to the ClosedChannels database
+		else:
+			## gather the r, s, v values from the signed data
+			r = signed_blob[2:66]
+			s = signed_blob[66:130]
+			v = signed_blob[130:132]
 
-		## I'm just gonna add these to the "closed transactions" db, and just assume they were successful
+			## build and then send a transaction from the owner address to the contract
+			tx_data = channel_instance.buildTransaction({'from':owner}).closeChannel(channel_id, paid, r, s, v)
+			tx_data_signed = w3.eth.signTransaction(tx_data, my_connections.owner_privkey)
+			tx_data_signed_raw = rlp.encode(tx_data_signed)
+			tx_data_signed_raw_hex = w3.toHex(tx_data_signed_raw)
+			## sending transaction...
+			tx_hash = w3.eth.sendRawTransaction(tx_data_signed_raw_hex)
 
-		query = 'INSERT INTO ClosedChannels (channel_id, payer_address, open_timestamp, deposit, paid, close_tx_hash, signed_blob) VALUES %s, %s, %s, %s, %s, %s, %s'
-		cursor.execute(query, (channel_id, payer_address, open_timestamp, deposit, paid, tx_hash, signed_blob))
-		conn.commit()
+			## WARNING: we are NOT currently checking is the transaction succeeds... yet
+			## we should implement this, either through some async function that callback's when the transaction is mined
+			## or through a intermediate table in the database, where we occassionally iterate through the rows, and see if
+			## they are successful, and can be added to the ClosedChannels database
 
-		## now delete this entry in the OpenChannels database
+			## I'm just gonna add these to the "closed transactions" db, and just assume they were successful
 
-		query = 'DELETE FROM OpenChannels WHERE channel_id = %s'
-		cursor.execute(query, (channel_id, ))
-		conn.commit()
+			query = 'INSERT INTO ClosedChannels (channel_id, payer_address, open_timestamp, deposit, paid, close_tx_hash, signed_blob) VALUES %s, %s, %s, %s, %s, %s, %s'
+			cursor.execute(query, (channel_id, payer_address, open_timestamp, deposit, paid, tx_hash, signed_blob))
+			conn.commit()
 
-		cursor.close()
-		conn.close()
+			## now delete this entry in the OpenChannels database
 
-		return (True, 'Channel closed. Thanks!')
+			query = 'DELETE FROM OpenChannels WHERE channel_id = %s'
+			cursor.execute(query, (channel_id, ))
+			conn.commit()
+
+			cursor.close()
+			conn.close()
+
+			return (True, 'Channel closed. Thanks!', deposit, paid)
 		
 
 def determine_valid_channel(channel_id, amt_to_pay=0):
-	## returns (bool - valid/invalid channel, string - reason for fail/success)
+	## returns (bool - valid/invalid channel, string - reason for fail/success, int deposit_amount, int paid_amt)
 	## NOTE: if channel is not yet in the database, and is valid, then we add it
 
 	## determine that this channel is valid, ie:
@@ -142,7 +167,7 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 
 	## if the channel is closed, then it is invalid
 	if (is_closed):
-		return (False, 'Closed channel')
+		return (False, 'Closed channel', 0, 0)
 
 	## get current block timestamp, channel open timestamp, and channel expire timedelta
 	latest_timestamp = w3.eth.getBlock('latest').timestamp
@@ -151,7 +176,7 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 
 	## if the channel is expired, or will expire in 6 hours, then this channel is invalid
 	if (open_timestamp + expire_timedelta < latest_timestamp - 21600):
-		return (False, 'Old channel')
+		return (False, 'Old channel', 0, 0)
 
 	## open a db connection, and see if this channel has been added to the database yet
 	## get payments that have been signed for, to see if user still has the required balance
@@ -159,31 +184,17 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 	conn = mysql.connector.connect(user=my_connections.mysql_user, password=my_connections.mysql_pass, host=my_connections.mysql_host, database=my_connections.mysql_dbname)
 	cursor = conn.cursor()
 
-	query = 'SELECT * FROM OpenChannels WHERE channel_id = %s'
+	query = 'SELECT paid FROM OpenChannels WHERE channel_id = %s'
 
-	rows = cursor.execute(query, (channel_id, ))
-	print(rows)
+	cursor.execute(query, (channel_id, ))
 
-	with rows[0] as row:
-		if (row == []):
-			## channel id has not been added to database
-			channel_in_db = False
-			paid_amt = 0
-		else:
-			channel_in_db = True
-			paid_amt = row['paid']
+	rows = cursor.fetchall()
 
-	## get channel balance from blockchain
+	## get deposit amount from blockchain
 	deposit_amt = channel_instance.call().getDeposit(channel_id)
 
-	if (channel_in_db and (paid_amt > deposit_amt or amt_to_pay > deposit_amt)):
-
-		cursor.close()
-		conn.close()
-
-		return (False, 'Channel fully paid')
-
-	if (not channel_in_db):
+	## channel not in db, so we have no payment data
+	if (rows is None):
 		payer_address = channel_instance.call().getPayer(channel_id)
 
 		## if payer address is zero, then it means that the channel is not opened
@@ -192,7 +203,7 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 			cursor.close()
 			conn.close()
 
-			return (False, 'Channel unopened')
+			return (False, 'Channel unopened', 0, 0)
 
 		query = 'INSERT INTO OpenChannels (channel_id, payer_address, open_timestamp, deposit, paid) VALUES (%s, %s, %s, %s, %s)'
 
@@ -202,18 +213,27 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 		cursor.close()
 		conn.close()
 
-		return (True, 'Channel added to database')
+		return (True, 'Channel added to database', deposit_amt, 0)
 
-	cursor.close()
-	conn.close()
+	## if channel is in db, then we need to check that there is still "space" in the channel to transact
+	else:
+		paid_amt = rows[0][0]
 
-	return (True, 'Channel in db')
+		if (paid_amt > deposit_amt or amt_to_pay > deposit_amt):
+			cursor.close()
+			conn.close()
+
+			return (False, 'Channel fully paid', deposit_amt, paid_amt)
+		else:
+			cursor.close()
+			conn.close()
+
+			return (True, 'Channel in db', deposit_amt, paid_amt)
+	
 
 ## for debugging purposes
 if __name__ == '__main__':
-	# app.run(debug=True, host='0.0.0.0')
-
-	print(determine_valid_channel(1))
+	app.run(debug=True, host='0.0.0.0')
 
 
 

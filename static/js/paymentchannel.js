@@ -1,3 +1,30 @@
+// Thanks to @xavierlepretre for providing the basis of this function
+// https://gist.github.com/xavierlepretre/88682e871f4ad07be4534ae560692ee6
+
+// This allows you to poll for a transaction receipt being mined, and allows you to 
+// circumvent the faulty metamask event watchers.
+// In standard web3.js, a getTransactionReceipt returns null if the tx has not been
+// mined yet. This will only return the actual receipt after the tx has been mined.
+
+function getTransactionReceiptMined(txHash) {
+    const self = this;
+    const transactionReceiptAsync = function(resolve, reject) {
+        web3.eth.getTransactionReceipt(txHash, (error, receipt) => {
+            if (error) {
+                reject(error);
+            } else if (receipt == null) {
+                setTimeout(
+                    () => transactionReceiptAsync(resolve, reject), 500);
+            } else {
+                resolve(receipt);
+            }
+        });
+    }
+    return new Promise(transactionReceiptAsync);
+};
+
+
+
 PaymentChannel = {
 	// save the web3 provider
 	web3Provider: null,
@@ -12,23 +39,23 @@ PaymentChannel = {
 
 
 	init: function(){
-		this.initWeb3();
-		this.bindClicks();
+		PaymentChannel.initWeb3();
+		PaymentChannel.bindClicks();
 	},
 
 	bindClicks: function(){
 
 		$('#start-channel').click(function(){
-			this.startChannel();
+			PaymentChannel.startChannel();
 		})
 		$('#start-watching').click(function(){
-			this.startWatching();
+			PaymentChannel.startWatching();
 		})
 		$('#stop-watching').click(function(){
-			this.stopWatching();
+			PaymentChannel.stopWatching();
 		})
 		$('#close-channel').click(function(){
-			this.closeChannel();
+			PaymentChannel.closeChannel();
 		})
 	},
 
@@ -37,7 +64,7 @@ PaymentChannel = {
         setTimeout(function(){
             if (typeof web3 !== 'undefined'){
                 console.log('getting web3');
-                this.web3Provider = web3.currentProvider;
+                PaymentChannel.web3Provider = web3.currentProvider;
             }
             else {
             	// we could attempt to connect to a local node here, but AFAIK you can't connect to a local node 
@@ -46,7 +73,7 @@ PaymentChannel = {
                 // flash modal saying "please download Metamask"
             }
 
-            return this.initContract(web3);
+            return PaymentChannel.initContract(web3);
 
         }, 500);
 	},
@@ -54,8 +81,8 @@ PaymentChannel = {
 	initContract: function(web3){
 		$.getJSON('./static/abi/PaymentChannelABI.json', function(data){
 			// initialize the contract and store as a local variable
-			this.Contract = web3.eth.contract(data);
-			this.contractInstance = this.Contract.at('0xb4108eb4a6afec5179dbbe261e813a7b1d9429c6');
+			PaymentChannel.Contract = web3.eth.contract(data);
+			PaymentChannel.contractInstance = PaymentChannel.Contract.at('0xb4108eb4a6afec5179dbbe261e813a7b1d9429c6');
 		});
 	},
 
@@ -63,19 +90,31 @@ PaymentChannel = {
 		// this function sends a transaction, via web3, to the blockchain starting a payment channel and depositing 0.1 ether
 		// once/if the transaction if successful, then the function will report to to the server that a channel has been started with 
 		// the corresponsing channel id, and the amount that has been deposited
-		this.recurringCharge = web3.toWei(1, "finney");
-		this.channelDeposit = web3.toWei(0.1, "ether");
-
-		this.contractInstance.methods.createChannel().send({value: this.channelDeposit, from: web3.eth.accounts[0]})
-			.on('transactionHash', function(hash){
-				console.log("your transaction has been submitted, please check http://kovan.etherscan.com/tx/" + hash + " for it's current status.")
-			})
-			.on('receipt', function(receipt){
-				console.log(receipt);
-			})
-			.on('error', function(error){
-				console.log('error while starting channel', error);
-			});	
+		PaymentChannel.recurringCharge = web3.toWei(1, "finney");
+		PaymentChannel.channelDeposit = web3.toWei(0.0000001, "ether");
+		console.log(PaymentChannel.contractInstance)
+		PaymentChannel.contractInstance.createChannel({gas:150000, value: PaymentChannel.channelDeposit, from: web3.eth.accounts[0]}, async function(error, result){
+			if (error){
+				console.log('could not create payment channel', error)
+			}
+			else {
+				txHash = result;
+				txReceipt = await getTransactionReceiptMined(txHash);
+				console.log(txReceipt);
+				if (txReceipt.logs === []){
+					console.log('transaction failed! check etherscan for more info');
+				}
+				else {
+					startChannelLog = txReceipt.logs[0];
+					console.log(startChannelLog);
+					channelId = startChannelLog.topics[2];
+					console.log(channelId);
+					$.post('opened-channel', {'channel_id': channelId}, function(data, status){
+						console.log(status, data);
+					})
+				}
+			}
+		});
 	},
 
 	startWatching: function(){
@@ -95,7 +134,8 @@ PaymentChannel = {
 		// to close the channel
 	}
 
-
-
-
 }
+
+$(document).ready(function(){
+	PaymentChannel.init();
+})

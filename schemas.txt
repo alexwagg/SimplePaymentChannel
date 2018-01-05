@@ -1,9 +1,9 @@
 CREATE TABLE `PaymentChannelDB`.`ClosedChannels` (
-  `channel_id` INT NOT NULL,
+  `channel_id` BIGINT(35) NOT NULL,
   `payer_address` VARCHAR(45) NOT NULL,
-  `open_timestamp` TIMESTAMP(6) NOT NULL,
-  `deposit` INT(25) NOT NULL,
-  `paid` INT(25) NOT NULL,
+  `open_timestamp` INT(11) NOT NULL,
+  `deposit` BIGINT(35) NOT NULL,
+  `paid` BIGINT(35) NOT NULL,
   `close_tx_hash` VARCHAR(90) NOT NULL,
   `signed_blob` VARCHAR(45) NOT NULL,
   PRIMARY KEY (`channel_id`),
@@ -12,11 +12,11 @@ CREATE TABLE `PaymentChannelDB`.`ClosedChannels` (
 
 
   CREATE TABLE `PaymentChannelDB`.`OpenChannels` (
-  `channel_id` INT NOT NULL,
+  `channel_id` BIGINT(35) NOT NULL,
   `payer_address` VARCHAR(45) NOT NULL,
-  `open_timestamp` TIMESTAMP(6) NOT NULL,
-  `deposit` INT(25) NOT NULL,
-  `paid` INT(25) NOT NULL,
+  `open_timestamp` INT(11) NOT NULL,
+  `deposit` BIGINT(35) NOT NULL,
+  `paid` BIGINT(35) NOT NULL,
   `signed_blob` BLOB NULL,
   PRIMARY KEY (`channel_id`),
   UNIQUE INDEX `channel_id_UNIQUE` (`channel_id` ASC));

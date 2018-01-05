@@ -1,3 +1,14 @@
+// I made this so web3.sha3 hashes the same things that will be hashed in the EVM
+function padTo32Bytes(str){
+	str = String(str);
+	var neededLen = 64;
+	var paddedLen = 64 - str.length;
+	for(var i = 0; i < paddedLen; i++){
+		str = '0' + str;
+	}
+	return str
+}
+
 // Thanks to @xavierlepretre for providing the basis of this function
 // https://gist.github.com/xavierlepretre/88682e871f4ad07be4534ae560692ee6
 
@@ -23,8 +34,6 @@ function getTransactionReceiptMined(txHash) {
     return new Promise(transactionReceiptAsync);
 };
 
-
-
 PaymentChannel = {
 	// save the web3 provider
 	web3Provider: null,
@@ -36,7 +45,6 @@ PaymentChannel = {
 	channelDeposit: null,
 	channelPendingCharge: null,
 	recurringCharge: null,
-
 
 	init: function(){
 		PaymentChannel.initWeb3();
@@ -82,7 +90,7 @@ PaymentChannel = {
 		$.getJSON('./static/abi/PaymentChannelABI.json', function(data){
 			// initialize the contract and store as a local variable
 			PaymentChannel.Contract = web3.eth.contract(data);
-			PaymentChannel.contractInstance = PaymentChannel.Contract.at('0xb4108eb4a6afec5179dbbe261e813a7b1d9429c6');
+			PaymentChannel.contractInstance = PaymentChannel.Contract.at('0xae028eb5a7d25f549d9101e80a914c8f2e5fbf1d');
 		});
 	},
 
@@ -90,8 +98,8 @@ PaymentChannel = {
 		// this function sends a transaction, via web3, to the blockchain starting a payment channel and depositing 0.1 ether
 		// once/if the transaction if successful, then the function will report to to the server that a channel has been started with 
 		// the corresponsing channel id, and the amount that has been deposited
-		PaymentChannel.recurringCharge = web3.toWei(1, "finney");
-		PaymentChannel.channelDeposit = web3.toWei(0.0000001, "ether");
+		PaymentChannel.recurringCharge = parseInt(web3.toWei(1, "finney"), 10);
+		PaymentChannel.channelDeposit = parseInt(web3.toWei(0.01, "ether"), 10);
 		console.log(PaymentChannel.contractInstance)
 		PaymentChannel.contractInstance.createChannel({gas:150000, value: PaymentChannel.channelDeposit, from: web3.eth.accounts[0]}, async function(error, result){
 			if (error){
@@ -106,11 +114,29 @@ PaymentChannel = {
 				}
 				else {
 					startChannelLog = txReceipt.logs[0];
-					console.log(startChannelLog);
 					channelId = startChannelLog.topics[2];
-					console.log(channelId);
+					
 					$.post('opened-channel', {'channel_id': channelId}, function(data, status){
-						console.log(status, data);
+						if (status === 'success'){
+							data = $.parseJSON(data);
+
+							var success = data['success'];
+							var msg = data['msg'];
+							var deposit = data['deposit'];
+							var paid = parseInt(data['paid'], 10);
+
+							if (success !== true){
+								console.log('server rejection', data);
+							}
+							else {
+								PaymentChannel.channelDeposit = deposit;
+								PaymentChannel.channelPendingCharge = paid;
+								PaymentChannel.channelId = web3.toDecimal(channelId);
+							}
+						}
+						else {
+							console.log('server failure', status, data);
+						}
 					})
 				}
 			}
@@ -121,6 +147,25 @@ PaymentChannel = {
 		// this function signs a message with the first deposit to the channel (0.001 ether), and the server will report back with 
 		// success, then the payment channel is live, and this process of signing a message for (last message amt + 0.001 ether) will
 		// repeat every 30 seconds
+		if (PaymentChannel.channelDeposit === null || PaymentChannel.channelDeposit === 0 || PaymentChannel.channelId === null){
+			console.log("It doesn't look like there is a valid channel established. Please start a payment channel");
+		}
+		else if (PaymentChannel.channelPendingCharge + PaymentChannel.recurringCharge > PaymentChannel.deposit){
+			// would be very user friendly to deposit more $ to the channel (would need to improve solidity contract)
+			// instead of needing close channel completely and reopen.
+			console.log("It looks like you have exceeded the deposit on your payment channel. Feel free to close this channel and start another!");
+		}
+		else {
+			// now sign data... sign soliditySha3(channelId, toPay) with owners private key, then send this signed blob to the server
+			var toPay = PaymentChannel.channelPendingCharge + PaymentChannel.recurringCharge;
+			// need to pad the string to 32 bytes and take out the 0x... in front of the web.toHex() strings.
+			var hashThisHexString = padTo32Bytes(web3.toHex(PaymentChannel.channelId).slice(2)) + padTo32Bytes(web3.toHex(toPay).slice(2));
+			console.log('hash this', hashThisHexString)
+			var toSign = web3.sha3(hashThisHexString, {encoding: 'hex'});
+			console.log('channel', PaymentChannel.channelId, 'to pay', toPay);
+			console.log('solidity hash', toSign);
+
+		}
 	},
 
 	stopWatching: function(){

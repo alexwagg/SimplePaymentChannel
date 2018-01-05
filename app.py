@@ -12,7 +12,7 @@ app = Flask(__name__)
 w3 = Web3(HTTPProvider('http://127.0.0.1:8545'))
 
 ## payment channel address
-channel_address = '0xB4108eb4A6AFEC5179dBBe261e813A7B1d9429C6'
+channel_address = '0xae028eb5a7d25f549d9101e80a914c8f2e5fbf1d'
 ## payment channel abi
 channel_abi = json.load(open('./static/abi/PaymentChannelABI.json'))
 ## initializing the contract with this address
@@ -26,13 +26,16 @@ def home():
 
 @app.route('/opened-channel', methods=['POST'])
 def opened_channel():
-	channel_id = request.form['channel_id']
+	try:
+		channel_id = w3.toInt(hexstr = request.form['channel_id'])
+	except:
+		return json.dumps({'success': False, 'msg': 'Channel ID must be hex-encoded'})
 
 	## now, use our own eth node to verify that the user actually created a channel with the proper deposit
 	## also, if the user created a channel, and it isn't in out database, this function will add it.
-	success, msg = determine_valid_channel(channel_id)
+	success, msg, deposit, paid = determine_valid_channel(channel_id)
 
-	return json.dumps({'success': success, 'msg': msg})
+	return json.dumps({'success': success, 'msg': msg, 'deposit': deposit, 'paid': paid})
 	
 @app.route('/pay-channel', methods=['POST'])
 def pay_channel():
@@ -106,7 +109,7 @@ def close_channel(channel_id):
 	rows = cursor.fetchall()
 
 	## if no rows exist, then this channel doesn't exist yet and can't be closed
-	if (rows == None):
+	if (rows == [] or rows == None):
 		return (False, 'Channel does not exist in database', 0, 0)
 
 	else:
@@ -174,6 +177,8 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 	open_timestamp = channel_instance.call().getOpenTime(channel_id)
 	expire_timedelta = channel_instance.call().CHANNELLIFETIME()
 
+	print(latest_timestamp, open_timestamp, expire_timedelta)
+
 	## if the channel is expired, or will expire in 6 hours, then this channel is invalid
 	if (open_timestamp + expire_timedelta < latest_timestamp - 21600):
 		return (False, 'Old channel', 0, 0)
@@ -189,12 +194,14 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 	cursor.execute(query, (channel_id, ))
 
 	rows = cursor.fetchall()
+	print(rows)
 
 	## get deposit amount from blockchain
 	deposit_amt = channel_instance.call().getDeposit(channel_id)
+	print(deposit_amt)
 
 	## channel not in db, so we have no payment data
-	if (rows is None):
+	if (rows == [] or rows == None):
 		payer_address = channel_instance.call().getPayer(channel_id)
 
 		## if payer address is zero, then it means that the channel is not opened
@@ -233,7 +240,9 @@ def determine_valid_channel(channel_id, amt_to_pay=0):
 
 ## for debugging purposes
 if __name__ == '__main__':
+	print(w3.soliditySha3(['uint256', 'uint256'], [21, 1000000000000000]))
 	app.run(debug=True, host='0.0.0.0')
+
 
 
 

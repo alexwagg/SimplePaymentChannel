@@ -151,5 +151,12 @@ contract PaymentChannel {
 		ChannelExpired(data.payer, channelId, data.deposit);
 	}
 
+	// WARMING: ONLY FOR TESTING! REMOVE THIS FOR LIFE DEPLOYMENT!
+	function selfDestruct() public{
+		require(msg.sender == OWNER);
+
+		selfdestruct(msg.sender);
+	}
+
 	////////////// end contract ////////////////////////////
 }

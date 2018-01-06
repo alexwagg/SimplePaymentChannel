@@ -45,6 +45,8 @@ PaymentChannel = {
 	channelDeposit: null,
 	channelPendingCharge: null,
 	recurringCharge: null,
+	// for the "start watching" timer
+	intervalId: null,
 
 	init: function(){
 		PaymentChannel.initWeb3();
@@ -90,7 +92,7 @@ PaymentChannel = {
 		$.getJSON('./static/abi/PaymentChannelABI.json', function(data){
 			// initialize the contract and store as a local variable
 			PaymentChannel.Contract = web3.eth.contract(data);
-			PaymentChannel.contractInstance = PaymentChannel.Contract.at('0xae028eb5a7d25f549d9101e80a914c8f2e5fbf1d');
+			PaymentChannel.contractInstance = PaymentChannel.Contract.at('0x19bee2ce208ae4f1a333cffc80976349d22b35f5');
 		});
 	},
 
@@ -100,7 +102,7 @@ PaymentChannel = {
 		// the corresponsing channel id, and the amount that has been deposited
 		PaymentChannel.recurringCharge = parseInt(web3.toWei(1, "finney"), 10);
 		PaymentChannel.channelDeposit = parseInt(web3.toWei(0.01, "ether"), 10);
-		console.log(PaymentChannel.contractInstance)
+		
 		PaymentChannel.contractInstance.createChannel({gas:150000, value: PaymentChannel.channelDeposit, from: web3.eth.accounts[0]}, async function(error, result){
 			if (error){
 				console.log('could not create payment channel', error)
@@ -132,6 +134,8 @@ PaymentChannel = {
 								PaymentChannel.channelDeposit = deposit;
 								PaymentChannel.channelPendingCharge = paid;
 								PaymentChannel.channelId = web3.toDecimal(channelId);
+
+								console.log(data);
 							}
 						}
 						else {
@@ -144,32 +148,88 @@ PaymentChannel = {
 	},
 
 	startWatching: function(){
+		// // when the user starts watching, immediately charge the channel
+		PaymentChannel.chargeChannel();
+		// then set an interval to charge the channel again every 10 seconds
+		PaymentChannel.intervalId = setInterval(function(){
+			PaymentChannel.chargeChannel();
+		}, 20000);
+
+		console.log('interval id', PaymentChannel.intervalId);
+	},
+
+	chargeChannel: function(){
 		// this function signs a message with the first deposit to the channel (0.001 ether), and the server will report back with 
 		// success, then the payment channel is live, and this process of signing a message for (last message amt + 0.001 ether) will
 		// repeat every 30 seconds
+		console.log('pending', PaymentChannel.channelPendingCharge, 'recurring', PaymentChannel.recurringCharge, 'deposit', PaymentChannel.channelDeposit);
 		if (PaymentChannel.channelDeposit === null || PaymentChannel.channelDeposit === 0 || PaymentChannel.channelId === null){
 			console.log("It doesn't look like there is a valid channel established. Please start a payment channel");
 		}
-		else if (PaymentChannel.channelPendingCharge + PaymentChannel.recurringCharge > PaymentChannel.deposit){
+		else if (PaymentChannel.channelPendingCharge + PaymentChannel.recurringCharge > PaymentChannel.channelDeposit){
 			// would be very user friendly to deposit more $ to the channel (would need to improve solidity contract)
 			// instead of needing close channel completely and reopen.
-			console.log("It looks like you have exceeded the deposit on your payment channel. Feel free to close this channel and start another!");
+			console.log("It looks like you have exceeded the deposit on your payment channel. Your channel will now be closed. Please start another!");
+			// now send a request to the server to close the channel
+			PaymentChannel.stopWatching();
+			PaymentChannel.closeChannel();
 		}
 		else {
 			// now sign data... sign soliditySha3(channelId, toPay) with owners private key, then send this signed blob to the server
 			var toPay = PaymentChannel.channelPendingCharge + PaymentChannel.recurringCharge;
 			// need to pad the string to 32 bytes and take out the 0x... in front of the web.toHex() strings.
 			var hashThisHexString = padTo32Bytes(web3.toHex(PaymentChannel.channelId).slice(2)) + padTo32Bytes(web3.toHex(toPay).slice(2));
-			console.log('hash this', hashThisHexString)
+			// sign this hash of the string... implemented correctly so that erc_recovers are easy in the EVM
 			var toSign = web3.sha3(hashThisHexString, {encoding: 'hex'});
-			console.log('channel', PaymentChannel.channelId, 'to pay', toPay);
-			console.log('solidity hash', toSign);
 
+			console.log('channel', PaymentChannel.channelId, 'to pay', toPay);
+
+			// TODO: use EIP712 signWithTypedData() so that users don't get the sketchy "this might be dangerous" warning from metamask
+			web3.eth.sign(web3.eth.accounts[0], toSign, function(error, result){
+				if (error){
+					console.log('error on signing', error);
+				}
+				else {
+					console.log(result);
+					$.post('pay-channel', {'amt_to_pay': toPay, 'channel_id': PaymentChannel.channelId, 'signed_blob': result}, function(data, status){
+						if (status === 'success'){
+							data = $.parseJSON(data);
+
+							var success = data['success'];
+							var msg = data['msg'];
+							var deposit = data['deposit'];
+							var paid = parseInt(data['paid'], 10);
+
+							if (success !== true){
+								console.log('server rejection', data);
+							}
+							else {
+								PaymentChannel.channelPendingCharge = paid;
+								console.log(data);
+							}
+						}
+						else {
+							console.log('server failure', status, data);
+						}
+					});
+				}
+			});
 		}
 	},
 
 	stopWatching: function(){
-		// this function will simply break stop the charges from occuring. basically the same as exiting the webpage
+		// this function will simply stop the interval charges from occuring. basically the same as exiting the webpage
+		if (PaymentChannel.intervalId === null && PaymentChannel.channelId === null){
+			console.log('You have not started a channel yet!');
+		}
+		else if (PaymentChannel.intervalId === null){
+			console.log('You have not started watching yet!');
+		}
+		else {
+			// end the interval
+			clearInterval(PaymentChannel.intervalId);
+			console.log('Watching has stopped!');
+		}
 	},
 
 	closeChannel: function(){
@@ -177,6 +237,9 @@ PaymentChannel = {
 		// of course, a user cannot close the channel with their acct. but this just expedites the charge/refund process 
 		// by requesting that the server closes the channel instead of waiting for the script that runs every... day/2 days(?) 
 		// to close the channel
+		$.post("close-channel", {'channel_id': PaymentChannel.channelId}, function(data, status){
+			console.log(status, data);
+		});
 	}
 
 }

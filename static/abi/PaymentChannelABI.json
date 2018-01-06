@@ -5,6 +5,41 @@
 			{
 				"name": "channelId",
 				"type": "uint256"
+			},
+			{
+				"name": "paidAmount",
+				"type": "uint256"
+			},
+			{
+				"name": "r",
+				"type": "bytes32"
+			},
+			{
+				"name": "s",
+				"type": "bytes32"
+			},
+			{
+				"name": "v",
+				"type": "uint8"
+			}
+		],
+		"name": "testECRecover",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
 			}
 		],
 		"name": "getPayer",
@@ -12,6 +47,25 @@
 			{
 				"name": "",
 				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "channelId",
+				"type": "uint256"
+			}
+		],
+		"name": "getOpenTime",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
 			}
 		],
 		"payable": false,
@@ -100,25 +154,6 @@
 	},
 	{
 		"constant": true,
-		"inputs": [
-			{
-				"name": "channelId",
-				"type": "uint256"
-			}
-		],
-		"name": "getOpenTime",
-		"outputs": [
-			{
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"payable": false,
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"constant": true,
 		"inputs": [],
 		"name": "CHANNELCOUNT",
 		"outputs": [
@@ -135,11 +170,11 @@
 		"constant": false,
 		"inputs": [
 			{
-				"name": "newOwner",
+				"name": "newTreasury",
 				"type": "address"
 			}
 		],
-		"name": "changeOwner",
+		"name": "changeTreasury",
 		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
@@ -251,19 +286,33 @@
 				"type": "uint256"
 			},
 			{
-				"name": "v",
-				"type": "uint8"
-			},
-			{
 				"name": "r",
 				"type": "bytes32"
 			},
 			{
 				"name": "s",
 				"type": "bytes32"
+			},
+			{
+				"name": "v",
+				"type": "uint8"
 			}
 		],
 		"name": "closeChannel",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "newOwner",
+				"type": "address"
+			}
+		],
+		"name": "changeOwner",
 		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
@@ -279,19 +328,5 @@
 		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "constructor"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "newTreasury",
-				"type": "address"
-			}
-		],
-		"name": "changeTreasury",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
 	}
 ]

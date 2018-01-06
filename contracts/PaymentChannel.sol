@@ -63,6 +63,10 @@ contract PaymentChannel {
 		return channelMapping[channelId].closed;
 	}
 
+	function testECRecover(uint256 channelId, uint256 paidAmount, bytes32 r, bytes32 s, uint8 v) public pure returns(address){
+		return ecrecover(keccak256(channelId, paidAmount), v, r, s);
+	}
+
 	/////////// channel logic functions ///////////////////////
 
 	function createChannel() public payable {

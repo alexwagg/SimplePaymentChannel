@@ -154,8 +154,6 @@ PaymentChannel = {
 		PaymentChannel.intervalId = setInterval(function(){
 			PaymentChannel.chargeChannel();
 		}, 20000);
-
-		console.log('interval id', PaymentChannel.intervalId);
 	},
 
 	chargeChannel: function(){
@@ -182,15 +180,12 @@ PaymentChannel = {
 			// sign this hash of the string... implemented correctly so that erc_recovers are easy in the EVM
 			var toSign = web3.sha3(hashThisHexString, {encoding: 'hex'});
 
-			console.log('channel', PaymentChannel.channelId, 'to pay', toPay);
-
 			// TODO: use EIP712 signWithTypedData() so that users don't get the sketchy "this might be dangerous" warning from metamask
 			web3.eth.sign(web3.eth.accounts[0], toSign, function(error, result){
 				if (error){
 					console.log('error on signing', error);
 				}
 				else {
-					console.log(result);
 					$.post('pay-channel', {'amt_to_pay': toPay, 'channel_id': PaymentChannel.channelId, 'signed_blob': result}, function(data, status){
 						if (status === 'success'){
 							data = $.parseJSON(data);

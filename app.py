@@ -61,8 +61,6 @@ def pay_channel():
 	except:
 		return json.dumps({'success': False, 'msg': 'Cannot ECRecover these values', 'deposit': deposit, 'paid': paid})
 
-	print('channel id', channel_id, 'amt to pay', amt_to_pay)
-	print('recovered address', recovered_address)
 
 	conn = mysql.connector.connect(user=my_connections.mysql_user, password=my_connections.mysql_pass, host=my_connections.mysql_host, database=my_connections.mysql_dbname)
 	cursor = conn.cursor()
@@ -72,9 +70,7 @@ def pay_channel():
 	rows = cursor.fetchall()
 
 	actual_address, paid, deposit = rows[0]
-	print('paid', paid, 'deposit', deposit, 'payment size', PAYMENT_SIZE, 'amt to pay', amt_to_pay)
-	print(paid + PAYMENT_SIZE != amt_to_pay)
-	# print(amt_to_pay)
+
 	## force the payment to be correct... this actually is covered by the ec recover (wouldn't return correct address if payment size was incorrect)
 	## but we can give a better error message this way
 	if (paid + PAYMENT_SIZE != amt_to_pay):
@@ -142,10 +138,7 @@ def close_channel(channel_id):
 
 			## build and then send a transaction from the owner address to the contract
 			tx_hash = str(channel_instance.transact({'from':my_connections.owner_pubkey}).closeChannel(channel_id, paid, r, s, v))
-			# print('tx data', tx_data)
 			# ## signing and sending transaction...
-			# tx_hash = w3.eth.signAndSendTrancaction(tx_data, my_connections.owner_paritypass)
-			print('tx hash', tx_hash)
 
 			## WARNING: we are NOT currently checking is the transaction succeeds... yet
 			## we should implement this, either through some async function that callback's when the transaction is mined
@@ -155,7 +148,6 @@ def close_channel(channel_id):
 			## I'm just gonna add these to the "closed transactions" db, and just assume they were successful
 
 			query = 'INSERT INTO ClosedChannels (channel_id, payer_address, open_timestamp, deposit, paid, close_tx_hash, signed_blob) VALUES (%s, %s, %s, %s, %s, %s, %s)'
-			print('channel_id', channel_id, 'payer_address', payer_address, 'open_timestamp', open_timestamp, 'deposit', deposit, 'paid', paid, 'tx_hash', tx_hash, 'signed_blob', signed_blob)
 			cursor.execute(query, (channel_id, payer_address, open_timestamp, deposit, paid, tx_hash, signed_blob))
 			conn.commit()
 
@@ -168,7 +160,7 @@ def close_channel(channel_id):
 			cursor.close()
 			conn.close()
 
-			return (True, 'Channel closed. Thanks!', deposit, paid)
+			return (True, 'Channel closed at transaction: ' + tx_hash +'. Thanks!', deposit, paid)
 		
 
 def determine_valid_channel(channel_id, amt_to_pay=0):

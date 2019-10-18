@@ -7,7 +7,7 @@ eth-keyfile==0.4.1
 eth-keys==0.1.0b4
 eth-tester==0.1.0b9
 eth-utils==0.7.3
-Flask==0.12.2
+Flask==1.0
 idna==2.6
 itsdangerous==0.24
 Jinja2==2.10

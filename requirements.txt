@@ -10,7 +10,7 @@ eth-utils==0.7.3
 Flask==0.12.2
 idna==2.6
 itsdangerous==0.24
-Jinja2==2.10
+Jinja2==2.11.3
 MarkupSafe==1.0
 mysql-connector-python-rf==2.2.2
 pycryptodome==3.4.7
